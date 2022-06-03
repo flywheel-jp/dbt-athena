@@ -1,6 +1,6 @@
 import agate
 import re
-import boto3
+import boto3.session
 from botocore.exceptions import ClientError
 from itertools import chain
 from threading import Lock
@@ -58,11 +58,12 @@ class AthenaAdapter(SQLAdapter):
     ):
         # Look up Glue partitions & clean up
         conn = self.connections.get_thread_connection()
-        client = conn.handle
+        creds = conn.credentials
+        session = boto3.session.Session(region_name=creds.region_name, profile_name=creds.aws_profile_name)
 
         with boto3_client_lock:
-            glue_client = boto3.client('glue', region_name=client.region_name)
-        s3_resource = boto3.resource('s3', region_name=client.region_name)
+            glue_client = session.client('glue')
+        s3_resource = session.resource('s3')
         partitions = glue_client.get_partitions(
             # CatalogId='123456789012', # Need to make this configurable if it is different from default AWS Account ID
             DatabaseName=database_name,
@@ -85,9 +86,10 @@ class AthenaAdapter(SQLAdapter):
     ):
         # Look up Glue partitions & clean up
         conn = self.connections.get_thread_connection()
-        client = conn.handle
+        creds = conn.credentials
+        session = boto3.session.Session(region_name=creds.region_name, profile_name=creds.aws_profile_name)
         with boto3_client_lock:
-            glue_client = boto3.client('glue', region_name=client.region_name)
+            glue_client = session.client('glue')
         try:
             table = glue_client.get_table(
                 DatabaseName=database_name,
@@ -105,7 +107,7 @@ class AthenaAdapter(SQLAdapter):
             if m is not None:
                 bucket_name = m.group(1)
                 prefix = m.group(2)
-                s3_resource = boto3.resource('s3', region_name=client.region_name)
+                s3_resource = session.resource('s3')
                 s3_bucket = s3_resource.Bucket(bucket_name)
                 s3_bucket.objects.filter(Prefix=prefix).delete()
 
